@@ -1,0 +1,3 @@
+Meta XR Core 201.0.0: omit supportsDynamicBatching telemetry on Unity 6000.6+, where URP marks the API as an error. Rendering configuration is unchanged. Retain upstream license. Review on SDK upgrade.
+
+2026-11-10: MetaXRSimulator/Installer.cs creates the destination directory before opening DownloadHandlerFile, limits the request to 120 seconds, rejects overlapping installation attempts, and releases the request, progress entry and play-mode callback on failure as well as success. Previously a file-creation exception left the editor blocked in "download in progress". Existing stale state may require an editor restart. Compiler validation with the Unity 6000.6.7f1 assembly response files passed; simulator download/installation has not been exercised.

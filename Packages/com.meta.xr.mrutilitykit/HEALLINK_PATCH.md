@@ -1,0 +1,1 @@
+MRUK 201.0.0: two diagnostic messages use GetEntityId instead of removed GetInstanceID. Compiled with Unity 6000.6.7f1 compiler against embedded source paths; exit code 0. Review when upgrading upstream.
