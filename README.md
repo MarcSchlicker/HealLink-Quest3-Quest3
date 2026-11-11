@@ -1,3 +1,7 @@
+## Aktueller Multiplayer-Stand
+
+Version 0.2.0 integriert die Headset-Bildschirmfreigabe aus dem Solo-Test in die LAN-Kopplung. Bedienung, Architektur und belegter Teststand stehen in [docs/INDEX.md](docs/INDEX.md). Die folgenden Ã¤lteren Notizen beschreiben teilweise frÃ¼here Prototypen.
+
 # HealLink QuestQuest
 
 HealLink QuestQuest is a clean two-Quest Unity project.
@@ -51,11 +55,11 @@ The role selection loads Trainee or Expert as a separate scene (single-scene loa
 
 Only Trainee uses local OVRPassthroughLayer Underlay, enables OVRManager passthrough and clears its camera transparently. Expert disables local passthrough and displays the Trainee camera on the saved Remote Trainee Camera Display object. Trainee requests HEADSET_CAMERA permission at runtime. Quest hardware validation is required.
 
-## Comparison with the HL2–Quest3 reference
+## Comparison with the HL2â€“Quest3 reference
 
 Compared against ../HealLink-HL2-Quest3-/README.md and the Quest client's QuestHandDataSender.cs and rgbd_align_ahat.cs:
 
-| Capability | Quest–Quest state |
+| Capability | Questâ€“Quest state |
 | --- | --- |
 | Opposite-role discovery and pairing | Implemented; matching simulation tested, two-device test pending |
 | Depth environment sharing | Quest depth-to-point-cloud code exists; real sensor acquisition/calibration unverified |
@@ -66,7 +70,7 @@ Compared against ../HealLink-HL2-Quest3-/README.md and the Quest client's QuestH
 | Remote expert hands | Both hands are shown as joint skeletons when both apps support hand sharing. The preview is head-relative and does not align the two rooms. |
 | Reference HL2 PV/AHAT alignment and depth filtering | Not ported; requires Quest-specific sensor integration |
 
-This is not yet full feature parity with the HL2–Quest3 application. Passthrough display is separate from camera capture/streaming.
+This is not yet full feature parity with the HL2â€“Quest3 application. Passthrough display is separate from camera capture/streaming.
 
 ### Remote camera prototype
 
