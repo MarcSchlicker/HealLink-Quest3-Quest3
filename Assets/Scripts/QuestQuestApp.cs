@@ -31,6 +31,10 @@ public sealed class QuestQuestApp : MonoBehaviour
     public int audioPort = 5090;
 
     public string PeerHost => discovery != null && discovery.Peer != null ? discovery.Peer.host : null;
+    public bool PeerSupportsHeadsetView => discovery?.Peer?.headsetViewVersion == 1;
+    public string PeerInstanceId => discovery?.Peer?.instanceId;
+    public int PeerHeadsetViewPort => discovery?.Peer?.headsetViewPort ?? 0;
+    [SerializeField] private bool enableLegacyDepthTools;
     private Camera xrCamera;
     private Transform cameraTransform;
     private QuestRole selectedRole = QuestRole.None;
@@ -61,7 +65,7 @@ public sealed class QuestQuestApp : MonoBehaviour
         {
             if (roleScene || loadingScene) return;
             QuestRole pickedRole;
-            if (roleSelection != null && roleSelection.TryPickRole(cameraTransform, out pickedRole, soloTestMenu))
+            if (roleSelection != null && roleSelection.TryPickRole(cameraTransform, out pickedRole, true))
             {
                 string targetScene = pickedRole == QuestRole.Trainee ? "Trainee" : "Expert";
                 if (soloTestMenu) targetScene = "SoloTest" + targetScene;
@@ -76,6 +80,11 @@ public sealed class QuestQuestApp : MonoBehaviour
             return;
         }
 
+        if (OVRInput.GetDown(OVRInput.Button.Two))
+        {
+            SceneManager.LoadScene("QuestQuest");
+            return;
+        }
         UpdatePeerTargets();
         UpdateStatusText();
     }
@@ -91,7 +100,8 @@ public sealed class QuestQuestApp : MonoBehaviour
         }
 
         discovery = gameObject.AddComponent<QuestDiscovery>();
-        discovery.Configure(role, discoveryPort, pointCloudPort, annotationPort, audioPort);
+        discovery.Configure(role, discoveryPort, pointCloudPort, annotationPort, audioPort,
+            GetComponent<QuestCameraStream>()?.port ?? 5091);
 
         annotations = gameObject.AddComponent<QuestAnnotationEndpoint>();
         annotations.Configure(role, annotationPort, cameraTransform, null);
@@ -99,7 +109,7 @@ public sealed class QuestQuestApp : MonoBehaviour
         voiceChat = gameObject.AddComponent<QuestVoiceChat>();
         voiceChat.Configure(audioPort, role == QuestRole.Expert);
 
-        if (role == QuestRole.Trainee)
+        if (enableLegacyDepthTools && role == QuestRole.Trainee)
         {
             depthSource = gameObject.AddComponent<QuestDepthSource>();
             depthSource.referenceCamera = cameraTransform;
@@ -107,7 +117,7 @@ public sealed class QuestQuestApp : MonoBehaviour
             pointCloudSender = gameObject.AddComponent<QuestPointCloudSender>();
             pointCloudSender.Configure(depthSource, discovery, pointCloudPort);
         }
-        else
+        else if (enableLegacyDepthTools)
         {
             pointCloudReceiver = gameObject.AddComponent<QuestPointCloudReceiver>();
             pointCloudReceiver.Configure(cameraTransform, pointCloudPort);
@@ -146,16 +156,14 @@ public sealed class QuestQuestApp : MonoBehaviour
         string peerText = discovery != null && discovery.Peer != null
             ? "Connected to " + discovery.Peer.role
             : "Waiting for the other Quest";
-        string depthText = selectedRole == QuestRole.Trainee
-            ? (depthSource != null && depthSource.HasDepthFrame ? "Quest depth active" : "Waiting for Quest depth")
-            : "";
-
-        statusText.text = string.IsNullOrEmpty(depthText)
-            ? roleText + "\n" + peerText
-            : roleText + "\n" + peerText + "\n" + depthText;
         var video = GetComponent<QuestCameraStream>();
-        if(video != null) statusText.text += "\n" + video.Status;
-        if (voiceChat != null) statusText.text += "\n" + voiceChat.Status;
+        bool viewing = selectedRole == QuestRole.Expert && video != null && video.HasRecentFrame;
+        statusText.gameObject.SetActive(!viewing);
+        statusText.text = video != null && video.IsSharing
+            ? "Sharing headset view"
+            : roleText + "\n" + peerText + (video != null ? "\n" + video.Status : "");
+        if (voiceChat != null && (video == null || !video.IsSharing))
+            statusText.text += "\n" + voiceChat.Status;
     }
 
     private void EnsureQuestRig()
@@ -214,7 +222,10 @@ public sealed class QuestQuestApp : MonoBehaviour
 
         if (statusText != null)
         {
-            statusText.transform.position = cameraTransform.position + cameraTransform.forward * 1.25f + cameraTransform.up * -0.58f;
+            var video = GetComponent<QuestCameraStream>();
+            Vector3 offset = video != null && video.IsSharing
+                ? new Vector3(-.3f, .35f, 1.1f) : new Vector3(0f, -.58f, 1.25f);
+            statusText.transform.position = cameraTransform.TransformPoint(offset);
             statusText.transform.rotation = Quaternion.LookRotation(statusText.transform.position - cameraTransform.position, cameraTransform.up);
         }
     }
@@ -749,6 +760,7 @@ internal sealed class QuestDiscovery : MonoBehaviour
     private int discoveryPort;
     private int pointCloudPort;
     private int annotationPort;
+    private int headsetViewPort;
     private int audioPort;
 
     private sealed class Candidate
@@ -797,12 +809,13 @@ internal sealed class QuestDiscovery : MonoBehaviour
         nextBroadcastTime = 0f;
     }
 
-    public void Configure(QuestRole selectedRole, int discovery, int pointCloud, int annotation, int audio)
+    public void Configure(QuestRole selectedRole, int discovery, int pointCloud, int annotation, int audio, int viewPort)
     {
         role = selectedRole;
         discoveryPort = discovery;
         pointCloudPort = pointCloud;
         annotationPort = annotation;
+        headsetViewPort = viewPort;
         audioPort = audio;
         instanceId = Guid.NewGuid().ToString("N");
         nextSelection = Time.unscaledTime + 2f;
@@ -911,12 +924,15 @@ internal sealed class QuestDiscovery : MonoBehaviour
                 seen = Time.unscaledTime,
                 peer = new QuestPeer
                 {
+                    instanceId = packet.instanceId,
                     role = peerRole,
                     host = received.endpoint.Address.ToString(),
                     pointCloudPort = packet.pointCloudPort,
                     annotationPort = packet.annotationPort,
                     audioPort = packet.audioPort,
-                    supportsHands = packet.supportsHands
+                    supportsHands = packet.supportsHands,
+                    headsetViewVersion = packet.headsetViewVersion == 1 && packet.headsetViewPort > 0 && packet.headsetViewPort <= 65535 ? 1 : 0,
+                    headsetViewPort = packet.headsetViewPort
                 }
             };
         }
@@ -933,7 +949,9 @@ internal sealed class QuestDiscovery : MonoBehaviour
             pointCloudPort = pointCloudPort,
             annotationPort = annotationPort,
             audioPort = audioPort,
-            supportsHands = true
+            supportsHands = true,
+            headsetViewVersion = 1,
+            headsetViewPort = headsetViewPort
         };
 
         byte[] bytes = Encoding.UTF8.GetBytes(JsonUtility.ToJson(packet));
@@ -986,17 +1004,22 @@ internal sealed class QuestDiscovery : MonoBehaviour
         public int annotationPort;
         public int audioPort;
         public bool supportsHands;
+        public int headsetViewVersion;
+        public int headsetViewPort;
     }
 }
 
 internal sealed class QuestPeer
 {
+    public string instanceId;
     public QuestRole role;
     public string host;
     public int pointCloudPort;
     public int annotationPort;
     public int audioPort;
     public bool supportsHands;
+    public int headsetViewVersion;
+    public int headsetViewPort;
 }
 
 internal sealed class QuestDepthSource : MonoBehaviour

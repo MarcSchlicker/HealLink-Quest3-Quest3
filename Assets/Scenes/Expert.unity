@@ -1142,7 +1142,7 @@ TextMesh:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 616298379}
-  m_Text: Live trainee view
+  m_Text: Trainee headset view
   m_OffsetZ: 0
   m_CharacterSize: 0.0073599997
   m_LineSpacing: 1
@@ -1485,7 +1485,7 @@ TextMesh:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1146984011}
-  m_Text: Receive camera feed
+  m_Text: Receive trainee headset view
   m_OffsetZ: 0
   m_CharacterSize: 0.0035199998
   m_LineSpacing: 1

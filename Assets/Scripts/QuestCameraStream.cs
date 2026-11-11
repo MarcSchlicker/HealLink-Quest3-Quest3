@@ -3,26 +3,44 @@ using System.IO;
 using System.Net;
 using System.Net.Sockets;
 using System.Threading;
-using Meta.XR;
 using UnityEngine;
 
-// Bounded transmission of the consenting trainee's headset compositor view.
+// One paired peer, one pending frame per direction, no frame history.
 public sealed class QuestCameraStream : MonoBehaviour
 {
     public bool sendCamera;
     public int port = 5091;
     public Renderer remoteDisplay;
+
+    private sealed class Target
+    {
+        internal readonly string Host;
+        internal readonly int Port;
+        internal readonly string InstanceId;
+        internal Target(string host, int port, string instanceId)
+        {
+            Host = host;
+            Port = port;
+            InstanceId = instanceId;
+        }
+    }
+
     private QuestQuestApp app;
-    private volatile bool running;
-    private volatile string peerHost;
-    private readonly object gate = new object();
-    private byte[] outgoing, incoming;
-    private TcpListener listener;
-    private TcpClient client;
-    private Thread worker;
     private HeadsetViewCapture headsetView;
-    private float nextFrame, lastFrame;
-    public string Status { get; private set; } = "Camera: waiting for a connection";
+    private volatile bool running;
+    private volatile Target target;
+    private volatile string networkFailure;
+    private readonly object frameGate = new object();
+    private readonly object socketGate = new object();
+    private byte[] outgoing, incoming;
+    private TcpClient connection;
+    private TcpListener listener;
+    private Thread worker;
+    private float nextFrame, lastFrame = -10f;
+
+    public bool HasRecentFrame => !sendCamera && target != null && Time.unscaledTime - lastFrame < 3f;
+    public bool IsSharing => sendCamera && target != null && headsetView != null && headsetView.IsReady;
+    public string Status { get; private set; } = "Waiting for the paired Quest";
 
     private void Start()
     {
@@ -31,108 +49,167 @@ public sealed class QuestCameraStream : MonoBehaviour
         if (sendCamera) headsetView.InitializeCapture();
         else if (remoteDisplay != null) headsetView.InitializeDisplay(Camera.main.transform, remoteDisplay);
         running = true;
-        worker = new Thread(NetworkLoop) { IsBackground = true, Name = "HealLink Camera" };
+        worker = new Thread(NetworkLoop) { IsBackground = true, Name = "HealLink headset view" };
         worker.Start();
     }
+
     private void Update()
     {
-        string target = app != null ? app.PeerHost : null;
-        if (peerHost != target)
+        string host = app.PeerSupportsHeadsetView ? app.PeerHost : null;
+        int remotePort = app.PeerHeadsetViewPort;
+        Target current = target;
+        if (current?.Host != host || (host != null &&
+            (current.Port != remotePort || current.InstanceId != app.PeerInstanceId)))
         {
-            peerHost = target;
-            lock(gate) { outgoing = null; incoming = null; }
-            client?.Close();
-            if (sendCamera) { if (target == null) headsetView.StopSharing(); else headsetView.RequestSharing(); }
-            if(remoteDisplay != null) remoteDisplay.enabled = false;
+            target = host == null ? null : new Target(host, remotePort, app.PeerInstanceId);
+            lock (frameGate) { outgoing = null; incoming = null; }
+            CloseConnection();
+            lastFrame = -10f;
+            if (remoteDisplay != null) remoteDisplay.enabled = false;
+            if (sendCamera)
+            {
+                if (target == null) headsetView.StopSharing();
+                else headsetView.RequestSharing();
+            }
         }
-        if (string.IsNullOrEmpty(target)) { Status = "Camera: waiting for a partner"; return; }
-        if (sendCamera && OVRInput.GetDown(OVRInput.Button.One)) headsetView.RequestSharing();
-        Status = headsetView.Status;
-        if (!sendCamera)
+
+        if (target == null)
+        {
+            Status = app.PeerHost == null ? "Waiting for the paired Quest"
+                : "Update the other Quest to enable headset view sharing";
+        }
+        else if (sendCamera)
+        {
+            if (OVRInput.GetDown(OVRInput.Button.One)) headsetView.RequestSharing();
+            Status = headsetView.Status;
+        }
+        else
         {
             byte[] frame;
-            lock (gate) { frame = incoming; incoming = null; }
+            lock (frameGate) { frame = incoming; incoming = null; }
             if (frame != null && headsetView.ShowFrame(frame)) lastFrame = Time.unscaledTime;
-            if (Time.unscaledTime - lastFrame > 3f && remoteDisplay != null) remoteDisplay.enabled = false;
+            if (remoteDisplay != null) remoteDisplay.enabled = HasRecentFrame;
+            Status = HasRecentFrame ? "Receiving the trainee headset view" : "Waiting for trainee screen sharing";
         }
+        if (networkFailure != null) Status = networkFailure;
+        if (!sendCamera) headsetView.SetLocalHandsVisible(!HasRecentFrame);
     }
+
     private void LateUpdate()
     {
-        if (!sendCamera || string.IsNullOrEmpty(peerHost) || Time.unscaledTime < nextFrame) return;
+        Target current = target;
+        if (!sendCamera || current == null || Time.unscaledTime < nextFrame) return;
         nextFrame = Time.unscaledTime + .1f;
-        string target = peerHost;
         headsetView.RequestFrame(frame =>
         {
-            if (running && peerHost == target) lock (gate) outgoing = frame;
+            lock (frameGate)
+                if (running && ReferenceEquals(target, current)) outgoing = frame;
         });
     }
+
     private void NetworkLoop()
     {
         try
         {
-            if(!sendCamera) { listener = new TcpListener(IPAddress.Any,port); listener.Start(); }
-            while(running)
+            if (!sendCamera)
             {
-                string target = peerHost;
-                if(string.IsNullOrEmpty(target)) { Thread.Sleep(100); continue; }
+                listener = new TcpListener(IPAddress.Any, port);
+                listener.Start();
+            }
+            while (running)
+            {
+                Target current = target;
+                if (current == null) { Thread.Sleep(100); continue; }
                 try
                 {
-                    if(sendCamera)
+                    using (TcpClient client = Connect(current))
                     {
-                        client = new TcpClient();
-                        var attempt = client.BeginConnect(target,port,null,null);
-                        using(attempt.AsyncWaitHandle)
+                        if (client == null) continue;
+                        lock (socketGate)
                         {
-                            if(!attempt.AsyncWaitHandle.WaitOne(1500)) throw new IOException("Connect timeout");
-                            client.EndConnect(attempt);
+                            if (!running || !ReferenceEquals(target, current)) continue;
+                            connection = client;
                         }
-                    }
-                    else
-                    {
-                        if(!listener.Pending()) { Thread.Sleep(100); continue; }
-                        client = listener.AcceptTcpClient();
-                        if(((IPEndPoint)client.Client.RemoteEndPoint).Address.ToString() != target) { client.Close(); continue; }
-                    }
-                    client.SendTimeout = 1500; client.ReceiveTimeout = 1500; client.NoDelay = true;
-                    using(var stream=client.GetStream())
-                    while(running && peerHost == target)
-                    {
-                        if(sendCamera)
+                        client.NoDelay = true;
+                        client.SendTimeout = 1500;
+                        client.ReceiveTimeout = 2000;
+                        using NetworkStream stream = client.GetStream();
+                        if (sendCamera) HeadsetFrameProtocol.WriteHello(stream);
+                        else HeadsetFrameProtocol.ReadHello(stream);
+                        while (running && ReferenceEquals(target, current))
                         {
-                            byte[] frame;
-                            lock(gate) { frame=outgoing;outgoing=null; }
-                            if(frame==null) { Thread.Sleep(20);continue; }
-                            byte[] header=BitConverter.GetBytes(IPAddress.HostToNetworkOrder(frame.Length));
-                            stream.Write(header,0,4);stream.Write(frame,0,frame.Length);
-                        }
-                        else
-                        {
-                            var header=ReadExactly(stream,4);
-                            int length=IPAddress.NetworkToHostOrder(BitConverter.ToInt32(header,0));
-                            if(length<1 || length>2*1024*1024) throw new IOException("Invalid camera frame");
-                            byte[] frame=ReadExactly(stream,length);
-                            lock(gate) incoming=frame;
+                            if (sendCamera)
+                            {
+                                byte[] frame;
+                                lock (frameGate) { frame = outgoing; outgoing = null; }
+                                HeadsetFrameProtocol.WriteFrame(stream, frame);
+                                // A zero-length heartbeat keeps the receiver alive while consent is pending.
+                                if (frame == null) Thread.Sleep(100);
+                                else Thread.Sleep(10);
+                            }
+                            else
+                            {
+                                byte[] frame = HeadsetFrameProtocol.ReadFrame(stream);
+                                if (frame == null) continue;
+                                lock (frameGate)
+                                    if (ReferenceEquals(target, current)) incoming = frame;
+                            }
                         }
                     }
                 }
-                catch(Exception e) when(e is IOException || e is SocketException || e is ObjectDisposedException) { }
-                finally { client?.Close(); }
-                if(running) Thread.Sleep(250);
+                catch (Exception ex) when (ex is IOException || ex is InvalidDataException ||
+                    ex is SocketException || ex is ObjectDisposedException)
+                {
+                    // Retrying retains only the latest frame; stale imagery expires on the main thread.
+                }
+                finally
+                {
+                    lock (socketGate) connection = null;
+                }
+                if (running) Thread.Sleep(250);
             }
         }
-        catch(SocketException) { /* Main-thread status remains waiting; port may be unavailable. */ }
+        catch (SocketException) { networkFailure = "Headset view port is unavailable. Restart the session."; }
         finally { listener?.Stop(); }
     }
-    private static byte[] ReadExactly(Stream stream,int count)
+
+    private TcpClient Connect(Target current)
     {
-        var bytes=new byte[count];int offset=0;
-        while(offset<count) { int n=stream.Read(bytes,offset,count-offset);if(n==0)throw new IOException("Disconnected");offset+=n; }
-        return bytes;
+        if (!sendCamera)
+        {
+            if (!listener.Pending()) { Thread.Sleep(100); return null; }
+            TcpClient accepted = listener.AcceptTcpClient();
+            if (((IPEndPoint)accepted.Client.RemoteEndPoint).Address.Equals(IPAddress.Parse(current.Host)))
+                return accepted;
+            accepted.Close();
+            return null;
+        }
+        var client = new TcpClient();
+        try
+        {
+            var attempt = client.BeginConnect(current.Host, current.Port, null, null);
+            using (attempt.AsyncWaitHandle)
+            {
+                if (!attempt.AsyncWaitHandle.WaitOne(1000)) throw new IOException("Connect timeout");
+                client.EndConnect(attempt);
+            }
+            return client;
+        }
+        catch { client.Dispose(); throw; }
     }
+
+    private void CloseConnection()
+    {
+        lock (socketGate) connection?.Close();
+    }
+
     private void OnDestroy()
     {
-        running=false;client?.Close();listener?.Stop();
-        worker?.Join(2000);
-
+        running = false;
+        target = null;
+        CloseConnection();
+        listener?.Stop();
+        worker?.Join(2500);
+        if (headsetView != null) headsetView.StopSharing();
     }
 }

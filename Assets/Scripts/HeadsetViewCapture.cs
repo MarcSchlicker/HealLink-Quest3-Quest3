@@ -9,6 +9,8 @@ public sealed class HeadsetViewCapture : MonoBehaviour
     private Texture2D image;
     private Material material;
     private Mesh screen;
+    private bool localHandsHidden;
+    private float nextHandVisibilityUpdate;
 #if UNITY_ANDROID && !UNITY_EDITOR
     private AndroidJavaClass bridge;
 #endif
@@ -115,8 +117,23 @@ public sealed class HeadsetViewCapture : MonoBehaviour
         return true;
     }
 
+    public void SetLocalHandsVisible(bool visible)
+    {
+        if (localHandsHidden == !visible && Time.unscaledTime < nextHandVisibilityUpdate) return;
+        nextHandVisibilityUpdate = Time.unscaledTime + .25f;
+        localHandsHidden = !visible;
+        foreach (var hand in FindObjectsByType<OVRHand>(FindObjectsSortMode.None))
+        {
+            foreach (var visual in hand.GetComponentsInChildren<OVRMeshRenderer>(true))
+                visual.enabled = visible;
+            foreach (var renderer in hand.GetComponentsInChildren<Renderer>(true))
+                renderer.enabled = visible;
+        }
+    }
+
     private void OnDestroy()
     {
+        if (localHandsHidden) SetLocalHandsVisible(true);
         StopSharing();
 #if UNITY_ANDROID && !UNITY_EDITOR
         bridge?.Dispose();

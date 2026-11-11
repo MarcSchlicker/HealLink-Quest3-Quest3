@@ -35,7 +35,6 @@ public sealed class SoloQuestTest : MonoBehaviour
     private int microphoneStart, displayedFrame = -1;
     private bool recordingNow, previousRecord = true, previousBack = true, readyForInput;
     private string message;
-    private float nextHandVisibilityUpdate;
 
     private string MediaPath => Path.Combine(Application.persistentDataPath, "trainee-headset-view-v4.bin");
     private string HandsPath => Path.Combine(Application.persistentDataPath, "expert-hands-v1.bin");
@@ -157,17 +156,7 @@ public sealed class SoloQuestTest : MonoBehaviour
 
         UpdatePlayback();
         bool showLocalHands = trainee || playback == null || recordingNow;
-        if (Time.unscaledTime >= nextHandVisibilityUpdate)
-        {
-            nextHandVisibilityUpdate = Time.unscaledTime + .25f;
-            foreach (var hand in FindObjectsByType<OVRHand>(FindObjectsSortMode.None))
-            {
-                foreach (var visual in hand.GetComponentsInChildren<OVRMeshRenderer>(true))
-                    visual.enabled = showLocalHands;
-                foreach (var renderer in hand.GetComponentsInChildren<Renderer>(true))
-                    renderer.enabled = showLocalHands;
-            }
-        }
+        headsetView.SetLocalHandsVisible(showLocalHands);
         statusText.gameObject.SetActive(trainee || playback == null || recordingNow);
         Transform label = statusText.transform;
         label.position = eye.transform.TransformPoint(recordingNow

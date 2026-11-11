@@ -1243,7 +1243,7 @@ TextMesh:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 662654909}
-  m_Text: Tap or pinch to select a role
+  m_Text: Aim the laser and pinch
   m_OffsetZ: 0
   m_CharacterSize: 0.00384
   m_LineSpacing: 1
@@ -1482,7 +1482,7 @@ TextMesh:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1146984011}
-  m_Text: Share your surroundings
+  m_Text: Share your headset view
   m_OffsetZ: 0
   m_CharacterSize: 0.0035199998
   m_LineSpacing: 1

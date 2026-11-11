@@ -1622,7 +1622,7 @@ TextMesh:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1146984011}
-  m_Text: Share passthrough and camera
+  m_Text: Share headset view and voice
   m_OffsetZ: 0
   m_CharacterSize: 0.0035199998
   m_LineSpacing: 1
