@@ -31,3 +31,10 @@ Assets/AssetStoreTools*
 Tests/Pairing/bin/
 !Tests/HeadsetTransport/HeadsetTransport.csproj
 Tests/HeadsetTransport/bin/
+
+/.codex/
+/.agents/
+/AGENTS.md
+/docs/AI_CONTEXT.md
+/docs/FEATURE_MAP.md
+/PROJEKTPILOT.md

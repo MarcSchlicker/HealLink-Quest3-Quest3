@@ -20,12 +20,6 @@ Multiplayer 0.2.0 wurde am 24.11.2026 auf beiden angeschlossenen Quest-3-Geräte
 - Der vorherige Point-Cloud-Modus startet standardmäßig nicht mehr. Seine Zeichenwerkzeuge sind nur im expliziten Legacy-Modus verfügbar.
 - B führt in die Rollenauswahl zurück.
 
-### Git und Dokumentation
-
-Ausgangsstand ist Commit 8ec68e8. Der vorhandene Git-Ordner besaß zuvor weder HEAD noch Konfiguration. Der lokale Ausgangscommit dokumentiert den vorhandenen Projektstand, die neue Integration liegt in Commit f3643f274e4ad76457cdec07b746072bfe0de2e2.
-
-Ein Git-Remote ist nicht eingerichtet. Es fand kein Push statt. Die Dokumentation unter docs ist mit dem Code versioniert. Generierte Unity-Dateien und APKs sind über .gitignore ausgeschlossen. Einzelne ungültige Zeichen der älteren README wurden beim Dokumentationsupdate in UTF-8 normalisiert.
-
 ### Verifikation
 
 Bestanden sind die 100 Kopplungssimulationen, die Tests des tatsächlichen TCP-Rahmungsquelltexts einschließlich lokaler Socket-Verbindung sowie die Prüfung der Dokumentationslinks und Szenenverweise.

@@ -9,7 +9,7 @@ Im Projektverzeichnis mit .NET SDK 9 und Python ausführen.
 
 Der Pairing-Test extrahiert die vorhandene Kopplungslogik aus QuestQuestApp und simuliert 100 Läufe mit vier Geräten. Er prüft Exklusivität, Timeout, Ersatzpartner und Ablehnung gleicher Rollen. Er ersetzt keinen LAN-Test.
 
-Der Transporttest kompiliert den tatsächlichen HeadsetFrameProtocol-Quelltext. Er prüft byteweise fragmentierte Lesevorgänge, mehrere aufeinanderfolgende Frames, Heartbeats, ungültige Kennungen, Größenlimits, abgeschnittene Pakete und einen echten lokalen TCP-Roundtrip. Eine Ausführungsumgebung muss Loopback-Sockets erlauben. In der Codex-Sandbox ergab der TCP-Aufruf Fehler 10013; außerhalb der Sandbox bestand er.
+Der Transporttest kompiliert den tatsächlichen HeadsetFrameProtocol-Quelltext. Er prüft byteweise fragmentierte Lesevorgänge, mehrere aufeinanderfolgende Frames, Heartbeats, ungültige Kennungen, Größenlimits, abgeschnittene Pakete und einen echten lokalen TCP-Roundtrip. Eine Ausführungsumgebung muss Loopback-Sockets erlauben.
 
 Beide Prüfungen wurden am 11.11.2026 erfolgreich ausgeführt.
 
