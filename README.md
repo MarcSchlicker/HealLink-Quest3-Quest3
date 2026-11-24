@@ -1,6 +1,6 @@
 # HealLink Quest 3 ↔ Quest 3
 
-Public successor to [HealLink-HL2-Quest3](https://github.com/MarcSchlicker/HealLink-HL2-Quest3) and its [Quest 3 client](https://github.com/MarcSchlicker/HealLink-Quest3).
+Successor to [HealLink-HL2-Quest3](https://github.com/MarcSchlicker/HealLink-HL2-Quest3) .
 
 This Unity project connects two Quest 3 headsets on the same LAN. A Trainee shares the actual headset view, including passthrough, through an explicit system screen-sharing prompt. An Expert receives that view and sends hand movements back. Both roles exchange microphone audio.
 
