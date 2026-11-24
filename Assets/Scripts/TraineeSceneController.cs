@@ -1,11 +1,9 @@
 using UnityEngine;
 using UnityEngine.Rendering.Universal;
-#if UNITY_ANDROID && !UNITY_EDITOR
-using UnityEngine.Android;
-#endif
 
 /// <summary>Starts the Trainee session when this scene runs. No networking in edit mode.</summary>
 [DisallowMultipleComponent]
+[DefaultExecutionOrder(-100)]
 [RequireComponent(typeof(QuestQuestApp))]
 public sealed class TraineeSceneController : MonoBehaviour
 {
@@ -25,10 +23,6 @@ public sealed class TraineeSceneController : MonoBehaviour
             eye.allowHDR = false;
             eye.GetUniversalAdditionalCameraData().renderPostProcessing = false;
         }
-#if UNITY_ANDROID && !UNITY_EDITOR
-        if (!Permission.HasUserAuthorizedPermission(Permission.Microphone))
-            Permission.RequestUserPermission(Permission.Microphone);
-#endif
         if (sceneOverview != null) sceneOverview.SetActive(false);
         GetComponent<QuestQuestApp>().StartRole(QuestRole.Trainee);
     }

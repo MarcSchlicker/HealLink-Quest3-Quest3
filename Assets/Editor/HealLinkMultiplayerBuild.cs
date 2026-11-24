@@ -18,10 +18,10 @@ public static class HealLinkMultiplayerBuild
         {
             PlayerSettings.SetApplicationIdentifier(NamedBuildTarget.Android, "de.heallink.questquest");
             PlayerSettings.productName = "HealLink QuestQuest";
-            PlayerSettings.bundleVersion = "0.2.0";
-            PlayerSettings.Android.bundleVersionCode = 2;
+            PlayerSettings.bundleVersion = "0.3.0";
+            PlayerSettings.Android.bundleVersionCode = 3;
             EditorUserBuildSettings.buildAppBundle = false;
-            string output = Path.GetFullPath("Builds/HealLink-Multiplayer-0.2.0.apk");
+            string output = Path.GetFullPath("Builds/HealLink-Multiplayer-0.3.0.apk");
             Directory.CreateDirectory(Path.GetDirectoryName(output));
             var report = BuildPipeline.BuildPlayer(new BuildPlayerOptions
             {

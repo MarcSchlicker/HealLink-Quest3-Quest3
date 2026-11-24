@@ -43,6 +43,9 @@ public sealed class QuestQuestApp : MonoBehaviour
     private bool loadingScene;
     private QuestRoleSelection roleSelection;
     private QuestDiscovery discovery;
+    public QuestRelayTransport Relay { get; private set; }
+    public bool RoleStarted => selectedRole != QuestRole.None;
+    public bool MicrophonePermissionPending => voiceChat != null && voiceChat.PermissionPending;
     private QuestDepthSource depthSource;
     private QuestPointCloudSender pointCloudSender;
     private QuestPointCloudReceiver pointCloudReceiver;
@@ -56,11 +59,31 @@ public sealed class QuestQuestApp : MonoBehaviour
     {
         EnsureQuestRig();
         CreateStatusText();
-        if (!roleScene) CreateRoleSelection();
+        if (!roleScene)
+        {
+            CreateRoleSelection();
+            if (!soloTestMenu)
+            {
+                try
+                {
+                    var settings = QuestRelaySettings.Load();
+                    statusText.text = settings.enabled ? "Internet / Room " + settings.room : "Local Wi-Fi";
+                }
+                catch (Exception ex) when (ex is IOException || ex is FormatException || ex is ArgumentException)
+                {
+                    statusText.text = "Relay configuration invalid. Check relay.json.";
+                }
+            }
+        }
     }
 
     private void Update()
     {
+        if (GetComponent<SoloQuestTest>() == null && OVRInput.GetDown(OVRInput.Button.Two))
+        {
+            SceneManager.LoadScene("QuestQuest");
+            return;
+        }
         if (selectedRole == QuestRole.None)
         {
             if (roleScene || loadingScene) return;
@@ -80,11 +103,6 @@ public sealed class QuestQuestApp : MonoBehaviour
             return;
         }
 
-        if (OVRInput.GetDown(OVRInput.Button.Two))
-        {
-            SceneManager.LoadScene("QuestQuest");
-            return;
-        }
         UpdatePeerTargets();
         UpdateStatusText();
     }
@@ -99,17 +117,33 @@ public sealed class QuestQuestApp : MonoBehaviour
             roleSelection.Hide();
         }
 
-        discovery = gameObject.AddComponent<QuestDiscovery>();
-        discovery.Configure(role, discoveryPort, pointCloudPort, annotationPort, audioPort,
-            GetComponent<QuestCameraStream>()?.port ?? 5091);
+        QuestRelaySettings settings;
+        try { settings = QuestRelaySettings.Load(); }
+        catch (Exception ex) when (ex is IOException || ex is FormatException || ex is ArgumentException)
+        {
+            selectedRole = QuestRole.None;
+            statusText.text = "Relay configuration invalid. Check relay.json.";
+            return;
+        }
+        if (settings.enabled)
+        {
+            Relay = gameObject.AddComponent<QuestRelayTransport>();
+            Relay.Configure(role, settings);
+        }
+        else
+        {
+            discovery = gameObject.AddComponent<QuestDiscovery>();
+            discovery.Configure(role, discoveryPort, pointCloudPort, annotationPort, audioPort,
+                GetComponent<QuestCameraStream>()?.port ?? 5091);
+        }
 
         annotations = gameObject.AddComponent<QuestAnnotationEndpoint>();
-        annotations.Configure(role, annotationPort, cameraTransform, null);
+        annotations.Configure(role, annotationPort, cameraTransform, null, Relay);
 
         voiceChat = gameObject.AddComponent<QuestVoiceChat>();
-        voiceChat.Configure(audioPort, role == QuestRole.Expert);
+        voiceChat.Configure(audioPort, true, Relay);
 
-        if (enableLegacyDepthTools && role == QuestRole.Trainee)
+        if (Relay == null && enableLegacyDepthTools && role == QuestRole.Trainee)
         {
             depthSource = gameObject.AddComponent<QuestDepthSource>();
             depthSource.referenceCamera = cameraTransform;
@@ -117,7 +151,7 @@ public sealed class QuestQuestApp : MonoBehaviour
             pointCloudSender = gameObject.AddComponent<QuestPointCloudSender>();
             pointCloudSender.Configure(depthSource, discovery, pointCloudPort);
         }
-        else if (enableLegacyDepthTools)
+        else if (Relay == null && enableLegacyDepthTools)
         {
             pointCloudReceiver = gameObject.AddComponent<QuestPointCloudReceiver>();
             pointCloudReceiver.Configure(cameraTransform, pointCloudPort);
@@ -133,6 +167,7 @@ public sealed class QuestQuestApp : MonoBehaviour
 
     private void UpdatePeerTargets()
     {
+        if (Relay != null) return;
         QuestPeer peer = discovery != null ? discovery.Peer : null;
         if (annotations != null)
         {
@@ -153,7 +188,7 @@ public sealed class QuestQuestApp : MonoBehaviour
         }
 
         string roleText = selectedRole == QuestRole.None ? "Choose a role" : selectedRole.ToString();
-        string peerText = discovery != null && discovery.Peer != null
+        string peerText = Relay != null ? Relay.Status : discovery != null && discovery.Peer != null
             ? "Connected to " + discovery.Peer.role
             : "Waiting for the other Quest";
         var video = GetComponent<QuestCameraStream>();
@@ -1971,6 +2006,7 @@ internal sealed class QuestAnnotationEndpoint : MonoBehaviour
     private Thread receiveThread;
     private volatile bool running;
     private QuestRole role;
+    private QuestRelayTransport relay;
     private Transform traineeCamera;
     private QuestPointCloudReceiver expertCloud;
     private volatile IPEndPoint remote;
@@ -1990,11 +2026,18 @@ internal sealed class QuestAnnotationEndpoint : MonoBehaviour
     private string activeStrokeId;
     private Material lineMaterial;
 
-    public void Configure(QuestRole selectedRole, int listenPort, Transform camera, QuestPointCloudReceiver cloud)
+    public void Configure(QuestRole selectedRole, int listenPort, Transform camera, QuestPointCloudReceiver cloud, QuestRelayTransport relayTransport = null)
     {
         role = selectedRole;
         traineeCamera = camera;
         expertCloud = cloud;
+        relay = relayTransport;
+        if (relay != null)
+        {
+            relay.HandsReceived += ReceiveRelayedHands;
+            relay.ConnectionChanged += ClearRelayedHands;
+            return;
+        }
         sender = new UdpClient();
         receiver = new UdpClient(listenPort);
         running = true;
@@ -2021,11 +2064,13 @@ internal sealed class QuestAnnotationEndpoint : MonoBehaviour
 
     private void SendHands()
     {
-        if (remote == null || !remoteSupportsHands || traineeCamera == null || Time.unscaledTime < nextHandSend)
+        if ((relay != null ? !relay.IsPaired : remote == null || !remoteSupportsHands) ||
+            traineeCamera == null || Time.unscaledTime < nextHandSend)
             return;
 
         nextHandSend = Time.unscaledTime + 1f / 20f;
         byte[] bytes = Encoding.UTF8.GetBytes(CaptureHandFrame(traineeCamera));
+        if (relay != null) { relay.SendHands(bytes); return; }
         try { sender.Send(bytes, bytes.Length, remote); }
         catch (SocketException) { }
     }
@@ -2124,8 +2169,28 @@ internal sealed class QuestAnnotationEndpoint : MonoBehaviour
         }
     }
 
+    private void ReceiveRelayedHands(byte[] bytes)
+    {
+        lock (queueLock)
+        {
+            if (queue.Count >= 32) queue.Dequeue();
+            queue.Enqueue(Encoding.UTF8.GetString(bytes));
+        }
+    }
+
+    private void ClearRelayedHands()
+    {
+        lock (queueLock) queue.Clear();
+        ShowHands(null);
+    }
+
     private void OnDisable()
     {
+        if (relay != null)
+        {
+            relay.HandsReceived -= ReceiveRelayedHands;
+            relay.ConnectionChanged -= ClearRelayedHands;
+        }
         running = false;
         if (receiver != null)
         {
@@ -2143,7 +2208,7 @@ internal sealed class QuestAnnotationEndpoint : MonoBehaviour
     private void Update()
     {
         if (role == QuestRole.Expert) SendHands();
-        if (role == QuestRole.Trainee && (remote == null || Time.unscaledTime - lastHandFrame > 0.35f))
+        if (role == QuestRole.Trainee && ((relay != null ? !relay.IsPaired : remote == null) || Time.unscaledTime - lastHandFrame > 0.35f))
             ShowHands(null);
 
         while (true)
@@ -2159,8 +2224,10 @@ internal sealed class QuestAnnotationEndpoint : MonoBehaviour
                 json = queue.Dequeue();
             }
 
-            AnnotationPacket packet = JsonUtility.FromJson<AnnotationPacket>(json);
-            if (packet == null || remote == null) continue;
+            AnnotationPacket packet;
+            try { packet = JsonUtility.FromJson<AnnotationPacket>(json); }
+            catch (ArgumentException) { continue; }
+            if (packet == null || (relay != null ? !relay.IsPaired : remote == null)) continue;
             if (packet.action == "hands")
             {
                 if (role == QuestRole.Trainee && traineeCamera != null && packet.joints?.Length == 50)
@@ -2263,6 +2330,7 @@ internal sealed class QuestVoiceChat : MonoBehaviour
 {
     private readonly object sampleLock = new object();
     private readonly Queue<float> playback = new Queue<float>(16000);
+    private QuestRelayTransport relay;
     private UdpClient sender;
     private UdpClient receiver;
     private volatile IPEndPoint remote;
@@ -2274,23 +2342,38 @@ internal sealed class QuestVoiceChat : MonoBehaviour
     private int sequence;
     private float nextMicAttempt;
     private bool buffering = true;
+    public bool PermissionPending { get; private set; }
     private volatile bool receivedVoice;
     public string Status => microphoneClip == null ? "Voice: waiting for microphone"
         : receivedVoice ? "Voice: receiving audio" : "Voice: microphone ready";
 
-    public void Configure(int listenPort, bool requestPermission)
+    public void Configure(int listenPort, bool requestPermission, QuestRelayTransport relayTransport = null)
     {
 #if UNITY_ANDROID && !UNITY_EDITOR
         if (requestPermission && !Permission.HasUserAuthorizedPermission(Permission.Microphone))
         {
-            Permission.RequestUserPermission(Permission.Microphone);
+            PermissionPending = true;
+            var callbacks = new PermissionCallbacks();
+            callbacks.PermissionGranted += _ => PermissionPending = false;
+            callbacks.PermissionDenied += _ => PermissionPending = false;
+            callbacks.PermissionDeniedAndDontAskAgain += _ => PermissionPending = false;
+            Permission.RequestUserPermission(Permission.Microphone, callbacks);
         }
 #endif
-        sender = new UdpClient();
-        receiver = new UdpClient(listenPort);
-        running = true;
-        receiveThread = new Thread(ReceiveLoop) { IsBackground = true };
-        receiveThread.Start();
+        relay = relayTransport;
+        if (relay != null)
+        {
+            relay.AudioReceived += ReceiveAudio;
+            relay.ConnectionChanged += ClearPlayback;
+        }
+        else
+        {
+            sender = new UdpClient();
+            receiver = new UdpClient(listenPort);
+            running = true;
+            receiveThread = new Thread(ReceiveLoop) { IsBackground = true };
+            receiveThread.Start();
+        }
 
         output = gameObject.AddComponent<AudioSource>();
         output.loop = true;
@@ -2314,8 +2397,24 @@ internal sealed class QuestVoiceChat : MonoBehaviour
         if (microphoneClip != null) lastMicPosition = Mathf.Max(0, Microphone.GetPosition(null));
     }
 
+    private void ClearPlayback()
+    {
+        lock (sampleLock)
+        {
+            playback.Clear();
+            buffering = true;
+            receivedVoice = false;
+        }
+        if (microphoneClip != null) lastMicPosition = Mathf.Max(0, Microphone.GetPosition(null));
+    }
+
     private void OnDisable()
     {
+        if (relay != null)
+        {
+            relay.AudioReceived -= ReceiveAudio;
+            relay.ConnectionChanged -= ClearPlayback;
+        }
         running = false;
         if (receiver != null)
         {
@@ -2350,7 +2449,7 @@ internal sealed class QuestVoiceChat : MonoBehaviour
             if (microphoneClip == null) return;
         }
 
-        if (remote == null || sender == null) return;
+        if (relay != null ? !relay.IsPaired : remote == null || sender == null) return;
         int position = Microphone.GetPosition(null);
         if (position < 0) return;
         int available = (position - lastMicPosition + microphoneClip.samples) % microphoneClip.samples;
@@ -2389,6 +2488,7 @@ internal sealed class QuestVoiceChat : MonoBehaviour
             }
 
             byte[] bytes = stream.ToArray();
+            if (relay != null) { relay.SendAudio(bytes); return; }
             try { sender.Send(bytes, bytes.Length, remote); }
             catch (SocketException) { }
         }
@@ -2405,35 +2505,43 @@ internal sealed class QuestVoiceChat : MonoBehaviour
                 var peer = remote;
                 if (peer == null || !peer.Address.Equals(endpoint.Address) || bytes.Length < 10 || bytes.Length > 1290)
                     continue;
-                using (MemoryStream stream = new MemoryStream(bytes))
-                using (BinaryReader reader = new BinaryReader(stream))
-                {
-                    if (reader.ReadByte() != (byte)'H' || reader.ReadByte() != (byte)'Q' || reader.ReadByte() != (byte)'A' || reader.ReadByte() != (byte)'1')
-                    {
-                        continue;
-                    }
-
-                    reader.ReadInt32();
-                    int count = reader.ReadUInt16();
-                    if (count == 0 || bytes.Length != 10 + count * 2) continue;
-                    lock (sampleLock)
-                    {
-                        if (!Equals(peer, remote)) continue;
-                        receivedVoice = true;
-                        for (int i = 0; i < count && stream.Position + 2 <= stream.Length; i++)
-                        {
-                            playback.Enqueue(reader.ReadInt16() / 32768f);
-                        }
-
-                        while (playback.Count > 4800)
-                        {
-                            playback.Dequeue();
-                        }
-                    }
-                }
+                DecodeAudio(bytes, peer);
             }
             catch
             {
+            }
+        }
+    }
+
+    private void ReceiveAudio(byte[] bytes) => DecodeAudio(bytes, null);
+
+    private void DecodeAudio(byte[] bytes, IPEndPoint expectedPeer)
+    {
+        if (bytes == null || bytes.Length < 10 || bytes.Length > 1290) return;
+        using (MemoryStream stream = new MemoryStream(bytes))
+        using (BinaryReader reader = new BinaryReader(stream))
+        {
+            if (reader.ReadByte() != (byte)'H' || reader.ReadByte() != (byte)'Q' || reader.ReadByte() != (byte)'A' || reader.ReadByte() != (byte)'1')
+            {
+                return;
+            }
+
+            reader.ReadInt32();
+            int count = reader.ReadUInt16();
+            if (count == 0 || bytes.Length != 10 + count * 2) return;
+            lock (sampleLock)
+            {
+                if (expectedPeer != null && !Equals(expectedPeer, remote)) return;
+                receivedVoice = true;
+                for (int i = 0; i < count && stream.Position + 2 <= stream.Length; i++)
+                {
+                    playback.Enqueue(reader.ReadInt16() / 32768f);
+                }
+
+                while (playback.Count > 4800)
+                {
+                    playback.Dequeue();
+                }
             }
         }
     }

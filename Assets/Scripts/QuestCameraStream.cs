@@ -26,6 +26,10 @@ public sealed class QuestCameraStream : MonoBehaviour
     }
 
     private QuestQuestApp app;
+    private QuestRelayTransport relay;
+    private bool relayWasPaired;
+    private bool screenConsentPending;
+    private float screenConsentTime;
     private HeadsetViewCapture headsetView;
     private volatile bool running;
     private volatile Target target;
@@ -38,16 +42,26 @@ public sealed class QuestCameraStream : MonoBehaviour
     private Thread worker;
     private float nextFrame, lastFrame = -10f;
 
-    public bool HasRecentFrame => !sendCamera && target != null && Time.unscaledTime - lastFrame < 3f;
-    public bool IsSharing => sendCamera && target != null && headsetView != null && headsetView.IsReady;
+    public bool HasRecentFrame => !sendCamera && (relay != null ? relay.IsPaired : target != null) &&
+        Time.unscaledTime - lastFrame < 3f;
+    public bool IsSharing => sendCamera && (relay != null ? relay.IsPaired : target != null) &&
+        headsetView != null && headsetView.IsReady;
     public string Status { get; private set; } = "Waiting for the paired Quest";
 
     private void Start()
     {
         app = GetComponent<QuestQuestApp>();
+        if (!app.RoleStarted) { enabled = false; return; }
+        relay = app.Relay;
         headsetView = gameObject.AddComponent<HeadsetViewCapture>();
         if (sendCamera) headsetView.InitializeCapture();
         else if (remoteDisplay != null) headsetView.InitializeDisplay(Camera.main.transform, remoteDisplay);
+        if (relay != null)
+        {
+            relay.VideoReceived += ReceiveRelayedVideo;
+            relay.ConnectionChanged += ResetRelayedView;
+            return;
+        }
         running = true;
         worker = new Thread(NetworkLoop) { IsBackground = true, Name = "HealLink headset view" };
         worker.Start();
@@ -55,6 +69,11 @@ public sealed class QuestCameraStream : MonoBehaviour
 
     private void Update()
     {
+        if (relay != null)
+        {
+            UpdateRelay();
+            return;
+        }
         string host = app.PeerSupportsHeadsetView ? app.PeerHost : null;
         int remotePort = app.PeerHeadsetViewPort;
         Target current = target;
@@ -68,8 +87,9 @@ public sealed class QuestCameraStream : MonoBehaviour
             if (remoteDisplay != null) remoteDisplay.enabled = false;
             if (sendCamera)
             {
+                screenConsentPending = target != null;
+                screenConsentTime = Time.unscaledTime + .5f;
                 if (target == null) headsetView.StopSharing();
-                else headsetView.RequestSharing();
             }
         }
 
@@ -80,7 +100,7 @@ public sealed class QuestCameraStream : MonoBehaviour
         }
         else if (sendCamera)
         {
-            if (OVRInput.GetDown(OVRInput.Button.One)) headsetView.RequestSharing();
+            PollScreenSharingRequest();
             Status = headsetView.Status;
         }
         else
@@ -97,6 +117,15 @@ public sealed class QuestCameraStream : MonoBehaviour
 
     private void LateUpdate()
     {
+        if (relay != null)
+        {
+            if (sendCamera && relay.IsPaired && Time.unscaledTime >= nextFrame)
+            {
+                nextFrame = Time.unscaledTime + .1f;
+                headsetView.RequestFrame(relay.SendVideo);
+            }
+            return;
+        }
         Target current = target;
         if (!sendCamera || current == null || Time.unscaledTime < nextFrame) return;
         nextFrame = Time.unscaledTime + .1f;
@@ -105,6 +134,62 @@ public sealed class QuestCameraStream : MonoBehaviour
             lock (frameGate)
                 if (running && ReferenceEquals(target, current)) outgoing = frame;
         });
+    }
+
+    private void ReceiveRelayedVideo(byte[] frame)
+    {
+        lock (frameGate) incoming = frame;
+    }
+
+    private void ResetRelayedView()
+    {
+        lock (frameGate) incoming = null;
+        lastFrame = -10f;
+        relayWasPaired = false;
+        screenConsentPending = false;
+        if (remoteDisplay != null) remoteDisplay.enabled = false;
+        if (sendCamera) headsetView.StopSharing();
+    }
+
+    private void UpdateRelay()
+    {
+        if (sendCamera)
+        {
+            if (relay.IsPaired && !relayWasPaired)
+            {
+                screenConsentPending = true;
+                screenConsentTime = Time.unscaledTime + .5f;
+            }
+            if (relay.IsPaired) PollScreenSharingRequest();
+            Status = relay.IsPaired ? headsetView.Status : relay.Status;
+        }
+        else
+        {
+            byte[] frame;
+            lock (frameGate) { frame = incoming; incoming = null; }
+            if (relay.IsPaired && frame != null && headsetView.ShowFrame(frame))
+                lastFrame = Time.unscaledTime;
+            if (remoteDisplay != null) remoteDisplay.enabled = HasRecentFrame;
+            headsetView.SetLocalHandsVisible(!HasRecentFrame);
+            Status = !relay.IsPaired ? relay.Status : HasRecentFrame
+                ? "Receiving the trainee through relay" : "Waiting for trainee screen sharing";
+        }
+        relayWasPaired = relay.IsPaired;
+    }
+
+    private void PollScreenSharingRequest()
+    {
+        if (OVRInput.GetDown(OVRInput.Button.One))
+        {
+            screenConsentPending = true;
+            screenConsentTime = Time.unscaledTime;
+        }
+        if (screenConsentPending && Time.unscaledTime >= screenConsentTime &&
+            !app.MicrophonePermissionPending)
+        {
+            screenConsentPending = false;
+            headsetView.RequestSharing();
+        }
     }
 
     private void NetworkLoop()
@@ -205,6 +290,11 @@ public sealed class QuestCameraStream : MonoBehaviour
 
     private void OnDestroy()
     {
+        if (relay != null)
+        {
+            relay.VideoReceived -= ReceiveRelayedVideo;
+            relay.ConnectionChanged -= ResetRelayedView;
+        }
         running = false;
         target = null;
         CloseConnection();

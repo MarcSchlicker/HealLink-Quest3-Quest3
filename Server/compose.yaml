@@ -1,0 +1,26 @@
+services:
+  relay:
+    build: .
+    restart: unless-stopped
+    environment:
+      HEALLINK_RELAY_TOKEN: ${HEALLINK_RELAY_TOKEN:?Set a secret relay access token}
+    expose:
+      - "8080"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    environment:
+      RELAY_DOMAIN: ${RELAY_DOMAIN:?Set your public DNS name}
+    ports:
+      - "443:443"
+      - "80:80"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+volumes:
+  caddy_data:
+  caddy_config:

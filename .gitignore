@@ -31,6 +31,13 @@ Assets/AssetStoreTools*
 Tests/Pairing/bin/
 !Tests/HeadsetTransport/HeadsetTransport.csproj
 Tests/HeadsetTransport/bin/
+!Tests/RelayClient/RelayClient.csproj
+Tests/RelayClient/bin/
+__pycache__/
+Server/.venv/
+.utmp/
+Server/.env
+relay.json
 
 /.codex/
 /.agents/

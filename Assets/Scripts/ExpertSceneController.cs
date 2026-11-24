@@ -2,6 +2,7 @@ using UnityEngine;
 
 /// <summary>Starts the Expert session when this scene runs. No networking in edit mode.</summary>
 [DisallowMultipleComponent]
+[DefaultExecutionOrder(-100)]
 [RequireComponent(typeof(QuestQuestApp))]
 public sealed class ExpertSceneController : MonoBehaviour
 {
