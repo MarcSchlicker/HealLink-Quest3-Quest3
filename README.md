@@ -1,3 +1,22 @@
+# HealLink Quest 3 ↔ Quest 3
+
+Public successor to [HealLink-HL2-Quest3](https://github.com/MarcSchlicker/HealLink-HL2-Quest3) and its [Quest 3 client](https://github.com/MarcSchlicker/HealLink-Quest3).
+
+This Unity project connects two Quest 3 headsets on the same LAN. A Trainee shares the actual headset view, including passthrough, through an explicit system screen-sharing prompt. An Expert receives that view and sends hand movements back. Both roles exchange microphone audio.
+
+- Unity editor used for the verified build: 6000.6.7f1.
+- Multiplayer scenes: QuestQuest, Trainee and Expert.
+- Android package: de.heallink.questquest, version 0.2.0.
+- Start with [documentation and verification status](docs/INDEX.md).
+- Build through HealLink → Build Multiplayer APK in Unity.
+- Both headsets need the same multiplayer version.
+
+This is a prototype. Automated pairing/transport checks and an APK build pass. Full acceptance with two worn headsets remains open. Traffic is unencrypted and intended for a trusted test LAN. See [testing](docs/TESTING.md) and [architecture](docs/MULTIPLAYER.md) for the exact scope.
+
+The earlier repositories document the HoloLens-to-Quest generation. This successor uses Quest-to-Quest pairing and system headset-view sharing. Embedded Meta SDK packages retain their original licences.
+
+---
+
 ## Aktueller Multiplayer-Stand
 
 Version 0.2.0 integriert die Headset-Bildschirmfreigabe aus dem Solo-Test in die LAN-Kopplung. Bedienung, Architektur und belegter Teststand stehen in [docs/INDEX.md](docs/INDEX.md). Die folgenden älteren Notizen beschreiben teilweise frühere Prototypen.

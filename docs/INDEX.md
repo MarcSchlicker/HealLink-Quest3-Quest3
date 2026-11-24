@@ -8,3 +8,7 @@ Die Multiplayer-Version 0.2.0 übernimmt die im Solo-Test eingeführte Headset-B
 - [KI-Einstieg](AI_CONTEXT.md) und [Funktionskarte](FEATURE_MAP.md) helfen bei gezielten Codeänderungen.
 
 Die Dokumente beschreiben den Quellstand. Ein erfolgreicher APK-Build ist keine Abnahme mit zwei getragenen Headsets.
+
+## Repository und Vorgänger
+
+[HealLink-Quest3-Quest3](https://github.com/MarcSchlicker/HealLink-Quest3-Quest3) ist der öffentliche Quest-zu-Quest-Nachfolger von [HealLink-HL2-Quest3](https://github.com/MarcSchlicker/HealLink-HL2-Quest3) und [HealLink-Quest3](https://github.com/MarcSchlicker/HealLink-Quest3).

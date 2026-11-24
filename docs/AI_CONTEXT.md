@@ -14,4 +14,4 @@ Wichtige Entscheidungen:
 - Die Systemfreigabe ist ausschließlich eine Benutzeraktion im Headset.
 - Keine Geräteabnahme aus einem erfolgreichen Build ableiten.
 
-Git wurde am 11.11.2026 lokal initialisiert, weil nur ein unvollständiger .git/objects-Ordner vorhanden war. Der erste Commit erhält den damaligen Gesamtstand. Ein Remote ist nicht eingerichtet. Die Datei PROJEKTPILOT.md gehörte bereits zum Arbeitsverzeichnis und wurde nicht in diesen Änderungssatz aufgenommen.
+Git wurde am 11.11.2026 lokal initialisiert, weil nur ein unvollständiger .git/objects-Ordner vorhanden war. Der erste Commit erhält den damaligen Gesamtstand. Am 24.11.2026 wurde das öffentliche Nachfolger-Repository eingerichtet. Remote origin ist https://github.com/MarcSchlicker/HealLink-Quest3-Quest3.git, Branch main. Die Datei PROJEKTPILOT.md gehörte bereits zum Arbeitsverzeichnis und wurde nicht in diesen Änderungssatz aufgenommen.

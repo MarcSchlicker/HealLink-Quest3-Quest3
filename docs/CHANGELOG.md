@@ -1,5 +1,11 @@
 # Änderungsverlauf
 
+## Öffentlicher Nachfolger — 24.11.2026
+
+Das Repository HealLink-Quest3-Quest3 führt die Quest-zu-Quest-Version als öffentlichen Nachfolger der bisherigen HoloLens-/Quest-Repositories weiter. Die bestehende lokale Commit-Historie wird übernommen. README und Dokumentation verweisen auf die Vorgänger.
+
+Multiplayer 0.2.0 wurde am 24.11.2026 auf beiden angeschlossenen Quest-3-Geräten installiert. ADB bestätigte jeweils Versioncode 2 und Versionname 0.2.0. Dies bestätigt die Installation, keine vollständige Funktionsabnahme mit zwei getragenen Headsets.
+
 ## 0.2.0 — 11.11.2026
 
 ### Multiplayer
