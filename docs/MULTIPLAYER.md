@@ -1,6 +1,18 @@
 # Multiplayer mit dem Blick des Trainees
 
-## Bedienung
+## Internet zwischen zwei Standorten
+
+Ab Version 0.3.0 gibt es einen optionalen Relay-Modus für getrennte Netze, etwa Lissabon und Berlin. Beide Quests verbinden sich ausgehend über WSS mit einem Uni-Server und derselben Sitzungskennung. Dieser Modus verwendet weder UDP-Broadcast noch direkte Geräteverbindungen. Im Relay-Modus ist eine Sitzung auf einen Trainee und einen Expert begrenzt.
+
+Der Dienst, Docker-Konfiguration und die Einrichtung der Quests sind unter [Server/README.md](../Server/README.md) beschrieben. Ohne aktivierte Relay-Konfiguration bleibt der bisherige LAN-Modus aktiv. Ein Eintrag in relay.json im persistentDataPath hat Vorrang vor den leeren Vorgaben in Assets/Resources/HealLinkRelay.json. Die Konfiguration wird beim Öffnen einer Rollen-Szene gelesen.
+
+Der Serverzugang wird durch ein geheimes Zugriffstoken geschützt. TLS schützt beide Internetverbindungen; der Server verarbeitet die Medien und ist kein Ende-zu-Ende-verschlüsselter Transport. Zertifikatsfehler werden nicht umgangen. Außerhalb des Editors werden ausschließlich wss-Adressen akzeptiert.
+
+QuestRelayTransport multiplexiert Video, Hände und PCM-Audio. Pro Richtung gibt es einen aktuellen Video- und Hand-Frame sowie höchstens 16 Audio-Pakete. Jedem Binärpaket sind ein Kanalbyte und die 16-Byte-Sitzungskennung vorangestellt. Der Server verwirft Pakete alter Sitzungen und Bilder aus der falschen Rolle. Sprachdaten werden in beide Richtungen übertragen. Neue Partner erhalten eine neue Sitzungskennung und leere Puffer.
+
+Bei Abbruch verbindet sich die App erneut mit dem Server. Nach erneuter Kopplung muss der Trainee die Bildschirmfreigabe gegebenenfalls neu bestätigen. Room-Code, Rolle und Serveradresse müssen auf beiden Seiten zueinander passen.
+
+## Bedienung im LAN
 
 1. Dieselbe Multiplayer-Version auf beiden Quest-3-Geräten installieren.
 2. Beide Geräte mit einem WLAN verbinden, das lokale Gerätekommunikation erlaubt.
@@ -49,7 +61,7 @@ Bei einem Partnerwechsel erhalten Verbindung und Puffer ein neues Zielobjekt. Ei
 
 ## Grenzen
 
-Die IP-Prüfung ist keine Authentifizierung. Bild, Hände und Sprache sind unverschlüsselt und für ein vertrautes Test-WLAN vorgesehen. Die Sprache ist ein PCM-Prototyp ohne Echo-Unterdrückung oder WebRTC. Reale Latenz, Audioqualität und Kopplung müssen mit zwei Geräten geprüft werden.
+Im LAN-Modus ist die IP-Prüfung keine Authentifizierung. Dort sind Bild, Hände und Sprache unverschlüsselt und für ein vertrautes Test-WLAN vorgesehen. Die Sprache ist ein PCM-Prototyp ohne Echo-Unterdrückung oder WebRTC. Reale Latenz, Audioqualität und Kopplung müssen mit zwei Geräten geprüft werden.
 
 Die frühere Tiefen-/Point-Cloud-Verarbeitung wird nur noch bei explizit gesetztem enableLegacyDepthTools gestartet. Sie ist im normalen Multiplayer standardmäßig aus. Das alte punktwolkenbasierte Zeichnen gehört deshalb nicht zum aktuellen Standardablauf. Die grundlegende Annotationen-Schnittstelle bleibt im Code erhalten.
 

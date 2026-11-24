@@ -1,5 +1,19 @@
 # Änderungsverlauf
 
+## 0.3.0 — 24.11.2026
+
+Der optionale Internetmodus verbindet Trainee und Expert über einen selbst gehosteten WSS-Relay. Damit können die Quests unterschiedliche WLANs oder Hotspots nutzen, etwa in Lissabon und Berlin. Übertragen werden die freigegebene Trainee-Headsetansicht, Expert-Handgelenke und Sprache in beide Richtungen. Der LAN-Modus bleibt verfügbar.
+
+Der Server liegt mit Docker-Konfiguration und Einrichtung in [Server/README.md](../Server/README.md). Beide Quests benötigen dieselbe Serveradresse, denselben Raumcode und Zugangsschlüssel in ihrer lokalen relay.json. Zugangsdaten sind nicht im Repository enthalten. Ein öffentlich erreichbarer Server ist noch nicht eingerichtet.
+
+Sechs lokale Relay-Tests einschließlich des tatsächlichen C#-Clients, die Kopplungssimulationen, TCP-Transporttests und die Compose-Konfigurationsprüfung bestanden. Der abschließende Android-/IL2CPP-Build mit Unity 6000.6.7f1 war erfolgreich. Containerbetrieb, Android-WSS-Lauf und die Verbindung zwischen den beiden Standorten sind noch nicht praktisch abgenommen. Diese APK wurde noch nicht auf den Quests installiert.
+
+- Quell-Commit: b8ef1d1c6f6bc0b791cc81a1cd2d8792d5d28dd1
+- Artefakt: Builds/HealLink-Multiplayer-0.3.0.apk, außerhalb von Git
+- Paketkennung: de.heallink.questquest
+- Version: 0.3.0, Android-Versioncode 3, ARM64
+- SHA-256: fbb4f241ea75d88c0e4b2257c3266f210a31b6940ec3682a81442b9603214118
+
 ## Öffentlicher Nachfolger — 24.11.2026
 
 Das Repository HealLink-Quest3-Quest3 führt die Quest-zu-Quest-Version als öffentlichen Nachfolger der bisherigen HoloLens-/Quest-Repositories weiter. Die bestehende lokale Commit-Historie wird übernommen. README und Dokumentation verweisen auf die Vorgänger.
