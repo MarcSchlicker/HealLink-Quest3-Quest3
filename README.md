@@ -13,8 +13,4 @@ The trainee shares their headset view, including passthrough. The expert sees th
 
 The headsets find each other automatically. Press **B** to return to the menu.
 
-This is a prototype. The full two-headset test is still pending.
-
-[Setup, architecture and tests](docs/INDEX.md)
-
 Successor to [HealLink-HL2-Quest3](https://github.com/MarcSchlicker/HealLink-HL2-Quest3).
